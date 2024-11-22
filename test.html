@@ -1,0 +1,114 @@
+<div class="chat-container">
+  <div class="chat-input-wrapper">
+    <input
+      type="text"
+      id="chatInput"
+      placeholder="How do we help you find your self?"
+    />
+    <button id="sendButton">Send</button>
+  </div>
+
+  <div id="questionsCarousel">
+    <!-- Questions will be inserted here -->
+  </div>
+
+  <div id="chatResponse"></div>
+</div>
+
+<script>
+  const INITIAL_QUESTIONS = [
+    "Do you offer showroom services?",
+    "Can you share a recent project?",
+    "What type of brands do you work with?",
+    "What countries do you work in?",
+    "How can you help my brand?",
+    "What services do you provide?",
+  ];
+
+  function initChat() {
+    const input = document.getElementById("chatInput");
+    const sendButton = document.getElementById("sendButton");
+    const questionsCarousel = document.getElementById("questionsCarousel");
+    const chatResponse = document.getElementById("chatResponse");
+
+    // Add initial questions
+    INITIAL_QUESTIONS.forEach((question) => {
+      const button = document.createElement("button");
+      button.textContent = question;
+      button.onclick = () => handleQuestionSelect(question);
+      questionsCarousel.appendChild(button);
+    });
+
+    // Event handlers
+    sendButton.onclick = handleSubmit;
+    input.onkeypress = (e) => {
+      if (e.key === "Enter") handleSubmit();
+    };
+
+    async function handleSubmit() {
+      const message = input.value.trim();
+      if (!message) return;
+
+      // Disable controls
+      input.disabled = true;
+      sendButton.disabled = true;
+
+      try {
+        const response = await fetch("http://localhost:3000/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: message }],
+          }),
+        });
+
+        const data = await response.json();
+        const content = JSON.parse(data.content.text);
+
+        // Display response
+        chatResponse.innerHTML = `
+        <p>${content.answer}</p>
+        ${
+          content.sources
+            ? `
+          <div>
+            ${content.sources
+              .map(
+                (source) => `
+              <a href="/${source.slug}">${source.name}</a>
+            `
+              )
+              .join("")}
+          </div>
+        `
+            : ""
+        }
+      `;
+
+        // Update follow-up questions
+        if (content.followUpQuestions) {
+          questionsCarousel.innerHTML = "";
+          content.followUpQuestions.forEach((question) => {
+            const button = document.createElement("button");
+            button.textContent = question;
+            button.onclick = () => handleQuestionSelect(question);
+            questionsCarousel.appendChild(button);
+          });
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        chatResponse.innerHTML = "<p>An error occurred. Please try again.</p>";
+      } finally {
+        input.disabled = false;
+        sendButton.disabled = false;
+      }
+    }
+
+    function handleQuestionSelect(question) {
+      input.value = question;
+      handleSubmit();
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", initChat);
+</script>
