@@ -39,7 +39,7 @@ const INITIAL_QUESTIONS = [
   "What countries do you work in?",
   "How can you help my brand?",
   "What services do you provide?",
-] as const;
+];
 
 const QuestionCarousel = ({
   questions,
