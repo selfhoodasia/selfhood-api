@@ -19,7 +19,7 @@ You must respond with valid JSON in the following format:
 {
   "answer": "Your direct answer (1-3 sentences, max 50 words)",
   "sources": [{ // only show 1 max
-    "slug": "slug", // for case studies, show as /casestudies/[slug]
+    "slug": "slug", // for case studies, show as casestudies/[slug]
     "name": "name", // page title of the source, ie for case studies it is the 'name' field ie " "name": "How[...]",", and for other pages it is the object key [ie "Services" or "About"]
   }],
   "followUpQuestions": [ // max 20 words each
