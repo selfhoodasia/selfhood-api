@@ -22,7 +22,7 @@ You must respond with valid JSON in the following format:
     "slug": "slug", // for case studies, show as casestudies/[slug]
     "name": "name", // page title of the source, ie for case studies it is the 'name' field ie " "name": "How[...]",", and for other pages it is the object key [ie "Services" or "About"]
   }],
-  "followUpQuestions": [ // max 20 words each
+  "followUpQuestions": [ // max 10 words each, should not be directly related to the current answer/source so as to increase discoverabilty
     "First follow-up question",
     "Second follow-up question",
     "Third follow-up question"
