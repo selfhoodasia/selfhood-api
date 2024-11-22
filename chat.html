@@ -12,8 +12,38 @@
     <!-- Questions will be inserted here -->
   </div>
 
-  <div id="chatResponse"></div>
+  <div id="chatResponse">
+    <div id="loadingIndicator" style="display: none;" class="loading-spinner">
+      <div class="spinner"></div>
+      <span>Thinking...</span>
+    </div>
+  </div>
 </div>
+
+<style>
+  .loading-spinner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
 
 <script>
   const INITIAL_QUESTIONS = [
@@ -30,6 +60,7 @@
     const sendButton = document.getElementById("sendButton");
     const questionsCarousel = document.getElementById("questionsCarousel");
     const chatResponse = document.getElementById("chatResponse");
+    const loadingIndicator = document.getElementById("loadingIndicator");
 
     // Add initial questions
     INITIAL_QUESTIONS.forEach((question) => {
@@ -49,12 +80,15 @@
       const message = input.value.trim();
       if (!message) return;
 
-      // Disable controls
+      // Disable controls and show loading
       input.disabled = true;
       sendButton.disabled = true;
+      loadingIndicator.style.display = "flex";
+      chatResponse.innerHTML = ""; // Clear previous response
+      chatResponse.appendChild(loadingIndicator); // Add loading indicator back to the response div
 
       try {
-        const response = await fetch("http://localhost:3000/api/chat", {
+        const response = await fetch("https://selfhood-api.vercel.app/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -66,24 +100,17 @@
         const content = JSON.parse(data.content.text);
 
         // Display response
+        loadingIndicator.style.display = "none";
         chatResponse.innerHTML = `
-        <p>${content.answer}</p>
-        ${
-          content.sources
-            ? `
-          <div>
-            ${content.sources
-              .map(
-                (source) => `
-              <a href="/${source.slug}">${source.name}</a>
-            `
-              )
-              .join("")}
-          </div>
-        `
-            : ""
-        }
-      `;
+          <p>${content.answer}</p>
+          ${content.sources ? `
+            <div>
+              ${content.sources.map(source => `
+                <a href="/${source.slug}">${source.name}</a>
+              `).join("")}
+            </div>
+          ` : ""}
+        `;
 
         // Update follow-up questions
         if (content.followUpQuestions) {
@@ -97,6 +124,7 @@
         }
       } catch (error) {
         console.error("Error:", error);
+        loadingIndicator.style.display = "none";
         chatResponse.innerHTML = "<p>An error occurred. Please try again.</p>";
       } finally {
         input.disabled = false;

@@ -1,4 +1,4 @@
-import { Anthropic } from '@anthropic-ai/sdk';
+import { Anthropic } from "@anthropic-ai/sdk";
 import { fetchWebflowData } from "@/lib/webflow";
 
 export const runtime = "edge";
@@ -42,11 +42,13 @@ ${JSON.stringify(contextData)}`;
     model: "claude-3-5-haiku-20241022",
     max_tokens: 1024,
     system: systemPrompt,
-    messages: messages
+    messages: messages,
   });
 
-  return new Response(JSON.stringify({ 
-    role: "assistant",
-    content: response.content[0]
-  }));
+  return new Response(
+    JSON.stringify({
+      role: "assistant",
+      content: response.content[0],
+    })
+  );
 }
