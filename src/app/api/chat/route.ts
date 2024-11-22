@@ -1,8 +1,9 @@
-import { anthropic } from "@ai-sdk/anthropic";
-import { streamText } from "ai";
+import { Anthropic } from '@anthropic-ai/sdk';
 import { fetchWebflowData } from "@/lib/webflow";
 
 export const runtime = "edge";
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: Request) {
   // Extract messages early to fail fast if invalid
@@ -17,7 +18,10 @@ export async function POST(req: Request) {
 You must respond with valid JSON in the following format:
 {
   "answer": "Your direct answer (1-3 sentences, max 50 words)",
-  "sources": ["[slug]", "[slug]"], // for case studies, show the slug name as /casestudies/[slug] (can show up to 2, though only when necessary. minimum 1)
+  "sources": [{ // only show 1 max
+    "slug": "slug", // for case studies, show as /casestudies/[slug]
+    "name": "name", // page title of the source, ie for case studies it is the 'name' field, and for other pages it is the object key [ie "Services" or "About"]
+  }],
   "followUpQuestions": [ // max 20 words each
     "First follow-up question",
     "Second follow-up question",
@@ -34,8 +38,15 @@ ${contextData.systemPrompt.questionPatterns}
 Context:
 ${JSON.stringify(contextData)}`;
 
-  return streamText({
-    model: anthropic("claude-3-5-haiku-20241022"),
-    messages: [{ role: "system", content: systemPrompt }, ...messages],
-  }).toDataStreamResponse();
+  const response = await anthropic.messages.create({
+    model: "claude-3-5-haiku-20241022",
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: messages
+  });
+
+  return new Response(JSON.stringify({ 
+    role: "assistant",
+    content: response.content[0]
+  }));
 }
