@@ -13,7 +13,9 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Access-Control-Allow-Origin',
-            value: 'https://selfhood-new.webflow.io',
+            value: process.env.NODE_ENV === 'development'
+              ? 'http://localhost:5500'
+              : 'https://selfhood-new.webflow.io',
           },
           {
             key: 'Access-Control-Allow-Methods',
