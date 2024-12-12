@@ -3,7 +3,7 @@ interface WebflowData {
   about: string;
   casestudies: CaseStudy[];
   index: string;
-  services: string;
+  offerings: string;
   contact: string;
   systemPrompt: SystemPrompt;
 }
@@ -43,7 +43,7 @@ const ENDPOINTS = {
   casestudies: "collections/67405a6bc01960d426e5da3f/items/live",
   about: "pages/6740554d9f3f3af86027fa6c/dom",
   index: "pages/674055a52157d44524e67fe4/dom",
-  services: "pages/674055be7198930c41a0cd9d/dom",
+  offerings: "pages/674055be7198930c41a0cd9d/dom",
   contact: "pages/67405571c37ae49704efc983/dom",
   systemPrompt:
     "collections/67409359ef24c542fe79ed6c/items/674093e0ef24c542fe7a83b1/live",
@@ -97,7 +97,7 @@ export async function fetchWebflowData(): Promise<WebflowData> {
         })
       ),
       index: cleanTextNodes(responseMap.index.nodes),
-      services: cleanTextNodes(responseMap.services.nodes),
+      offerings: cleanTextNodes(responseMap.offerings.nodes),
       contact: cleanTextNodes(responseMap.contact.nodes),
       systemPrompt: {
         styleGuidelines:
