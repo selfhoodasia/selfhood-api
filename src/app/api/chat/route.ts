@@ -19,7 +19,7 @@ You must respond with valid JSON in the following format:
 {
   "answer": "Your direct answer (1-3 sentences, max 50 words)",
   "sources": [{ // only show 1 max
-    "slug": "slug", // must be one of the page slugs from the context data
+    "slug": "slug", // must be either: "offerings", "index", "showroom", "about", or "casestudies/[case-study-slug]"
     "name": "name", // must be one of the page titles from the context data (Offerings, Index, Showroom, About, or case study names)
     }],
   "followUpQuestions": [ // max 10 words each, should not be directly related to the current answer/source so as to increase discoverabilty
