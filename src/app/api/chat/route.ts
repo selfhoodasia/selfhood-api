@@ -48,27 +48,15 @@ ${JSON.stringify(contextData, (_, value) =>
 
 export async function POST(req: Request) {
   try {
-    console.log("\n=== INCOMING REQUEST ===");
     const { messages } = await req.json();
-    console.log("Headers:", Object.fromEntries(req.headers.entries()));
-    console.log("Messages:", JSON.stringify(messages, null, 2));
-    console.log("=== END REQUEST ===\n");
-
-    // Enhanced logging for context data fetching
-    console.log("🔄 Starting context data fetch...");
     const contextData = await webflowFetcher.processPage(WEBFLOW_PAGE_ID);
-    
-    // Pretty print context data with clear separation
-    console.log("\n=== CONTEXT DATA ===");
-    console.log(JSON.stringify(contextData, null, 2));
-    console.log("=== END CONTEXT DATA ===\n");
-
     const systemPrompt = createSystemPrompt(contextData);
 
-    console.log(
-      "🤖 Sending request to Anthropic with system prompt length:",
-      systemPrompt.length
-    );
+    console.log("\n=== CHAT REQUEST ===");
+    console.log("Last Message:", messages[messages.length - 1]);
+    console.log("System Prompt:", systemPrompt);
+    console.log("=== END REQUEST ===\n");
+
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
@@ -76,9 +64,9 @@ export async function POST(req: Request) {
       messages,
     });
 
-    // Enhanced response logging
-    console.log("✅ Anthropic Response Content:");
+    console.log("=== CHAT RESPONSE ===");
     console.log(JSON.stringify(response.content[0], null, 2));
+    console.log("=== END RESPONSE ===\n");
 
     return new Response(
       JSON.stringify({
@@ -92,27 +80,23 @@ export async function POST(req: Request) {
       }
     );
   } catch (error) {
-    // Enhanced error logging
-    console.error("❌ Error in chat API:", {
-      message: error instanceof Error ? error.message : "Unknown error",
-      type: error instanceof Error ? error.constructor.name : typeof error,
-      stack: error instanceof Error ? error.stack : "No stack trace available",
-    });
+    console.error(
+      "Error in chat API:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
 
     const errorResponse = {
       error: "Internal Server Error",
-      message: error instanceof Error ? error.message : "Unknown error occurred",
+      message:
+        error instanceof Error ? error.message : "Unknown error occurred",
       type: error instanceof Error ? error.constructor.name : typeof error,
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
   }
 }

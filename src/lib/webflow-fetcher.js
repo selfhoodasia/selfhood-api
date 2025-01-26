@@ -7,11 +7,11 @@ export class WebflowFetcher {
     BASE_URL: "https://api.webflow.com/v2",
     COLLECTIONS: {
       CASE_STUDIES: "67405a6bc01960d426e5da3f",
-      SYSTEM_PROMPT: "67409359ef24c542fe79ed6c"
+      SYSTEM_PROMPT: "67409359ef24c542fe79ed6c",
     },
     ITEMS: {
-      SYSTEM_PROMPT: "674093e0ef24c542fe7a83b1"
-    }
+      SYSTEM_PROMPT: "674093e0ef24c542fe7a83b1",
+    },
   };
 
   #componentCache = new Map();
@@ -26,29 +26,22 @@ export class WebflowFetcher {
       baseURL: WebflowFetcher.CONFIG.BASE_URL,
       headers: {
         Authorization: `Bearer ${WebflowFetcher.CONFIG.API_KEY}`,
-        Accept: "application/json"
-      }
+        Accept: "application/json",
+      },
     });
   }
 
   // Simple HTML to Markdown converter
   #htmlToMarkdown(html) {
-    if (!html) return '';
-    
-    // Basic HTML to Markdown conversions
+    if (!html) return "";
+
+    // Remove all HTML tags but keep their content and newlines
     return html
-      .replace(/<h[1-6]>(.*?)<\/h[1-6]>/gi, '## $1\n\n')
-      .replace(/<p>(.*?)<\/p>/gi, '$1\n\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
-      .replace(/<em>(.*?)<\/em>/gi, '*$1*')
-      .replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)')
-      .replace(/<ul>(.*?)<\/ul>/gis, '$1\n')
-      .replace(/<li>(.*?)<\/li>/gi, '- $1\n')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .trim();
   }
@@ -57,14 +50,16 @@ export class WebflowFetcher {
     try {
       const [dom, caseStudies, systemPrompt] = await Promise.all([
         this.#getDom(`pages/${pageId}/dom`),
-        this.#getCollectionItems(WebflowFetcher.CONFIG.COLLECTIONS.CASE_STUDIES),
-        this.#getSystemPrompt()
+        this.#getCollectionItems(
+          WebflowFetcher.CONFIG.COLLECTIONS.CASE_STUDIES
+        ),
+        this.#getSystemPrompt(),
       ]);
 
       return {
         pages: this.#extractContent(await this.#processComponents(dom.nodes)),
         caseStudies: this.#transformCaseStudies(caseStudies.items),
-        systemPrompt: this.#transformSystemPrompt(systemPrompt)
+        systemPrompt: this.#transformSystemPrompt(systemPrompt),
       };
     } catch (error) {
       return { error: error.message, details: error.cause };
@@ -72,15 +67,19 @@ export class WebflowFetcher {
   }
 
   async #processComponents(nodes) {
-    return Promise.all(nodes.map(async node => {
-      if (node.type === "component-instance") {
-        const components = await this.#getComponentDefinition(node.componentId);
-        node.children = await this.#processComponents(components);
-      }
-      return node.children?.length 
-        ? { ...node, children: await this.#processComponents(node.children) } 
-        : node;
-    }));
+    return Promise.all(
+      nodes.map(async (node) => {
+        if (node.type === "component-instance") {
+          const components = await this.#getComponentDefinition(
+            node.componentId
+          );
+          node.children = await this.#processComponents(components);
+        }
+        return node.children?.length
+          ? { ...node, children: await this.#processComponents(node.children) }
+          : node;
+      })
+    );
   }
 
   #extractContent(nodes) {
@@ -95,7 +94,7 @@ export class WebflowFetcher {
           content[currentPage] = {
             title: currentPage,
             slug: this.#createSlug(currentPage),
-            markdown: ""
+            markdown: "",
           };
         } else if (currentPage) {
           content[currentPage].markdown += this.#htmlToMarkdown(html) + "\n";
@@ -109,8 +108,12 @@ export class WebflowFetcher {
   }
 
   #createSlug(title) {
-    return title.toLowerCase() === "index" ? "/in" : 
-      `/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+    return title.toLowerCase() === "index"
+      ? "/in"
+      : `/${title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")}`;
   }
 
   // API methods
@@ -119,9 +122,16 @@ export class WebflowFetcher {
   }
 
   async #getComponentDefinition(componentId) {
-    return this.#componentCache.get(componentId) || 
-      this.#fetchData(`sites/${WebflowFetcher.CONFIG.SITE_ID}/components/${componentId}/dom`)
-        .then(data => (this.#componentCache.set(componentId, data.nodes), data.nodes));
+    return (
+      this.#componentCache.get(componentId) ||
+      this.#fetchData(
+        `sites/${WebflowFetcher.CONFIG.SITE_ID}/components/${componentId}/dom`
+      ).then(
+        (data) => (
+          this.#componentCache.set(componentId, data.nodes), data.nodes
+        )
+      )
+    );
   }
 
   async #getCollectionItems(collectionId) {
@@ -146,7 +156,7 @@ export class WebflowFetcher {
       acc[key] = {
         title: item.fieldData.name,
         slug: `/casestudies/${item.fieldData.slug}`,
-        content: this.#htmlToMarkdown(item.fieldData.content || '')
+        content: this.#htmlToMarkdown(item.fieldData.content || ""),
       };
       return acc;
     }, {});
@@ -155,7 +165,7 @@ export class WebflowFetcher {
   #transformSystemPrompt(data) {
     return {
       styleGuidelines: data.fieldData["style-guidelines"] || "",
-      questionPatterns: data.fieldData["specific-question-patterns"] || ""
+      questionPatterns: data.fieldData["specific-question-patterns"] || "",
     };
   }
 }
