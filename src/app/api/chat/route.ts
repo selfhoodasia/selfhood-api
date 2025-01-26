@@ -1,7 +1,11 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 import axios from "axios";
+import { WebflowFetcher } from "@/lib/webflow-fetcher";
 
-export const runtime = "edge";
+// Add debug logging at the top of the file
+console.log("Environment Variables Check:");
+console.log("ANTHROPIC_API_KEY:", process.env.ANTHROPIC_API_KEY);
+console.log("WEBFLOW_API_TOKEN:", process.env.WEBFLOW_API_TOKEN);
 
 // Webflow configuration
 const WEBFLOW_CONFIG = {
@@ -18,39 +22,23 @@ const WEBFLOW_CONFIG = {
 };
 
 // Validate required environment variables
-if (!WEBFLOW_CONFIG.API_KEY) {
+if (!process.env.WEBFLOW_API_TOKEN) {
   throw new Error("WEBFLOW_API_TOKEN environment variable is not set");
 }
 if (!process.env.ANTHROPIC_API_KEY) {
   throw new Error("ANTHROPIC_API_KEY environment variable is not set");
 }
 
-// Initialize Anthropic client with enhanced logging
-console.log("Starting Anthropic client initialization...");
-console.log("Environment:", process.env.NODE_ENV);
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("ANTHROPIC_API_KEY is undefined!");
-} else {
-  console.log(
-    "ANTHROPIC_API_KEY present with length:",
-    process.env.ANTHROPIC_API_KEY.length
-  );
-  console.log(
-    "ANTHROPIC_API_KEY preview:",
-    `${process.env.ANTHROPIC_API_KEY.slice(0, 10)}...${process.env.ANTHROPIC_API_KEY.slice(-10)}`
-  );
-}
-
+// Initialize Anthropic client (simplified logging)
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
-console.log("Anthropic client initialized");
 
-// Configure axios instance for Webflow
+// Update Webflow client configuration
 const webflowClient = axios.create({
   baseURL: WEBFLOW_CONFIG.BASE_URL,
   headers: {
-    Authorization: `Bearer ${WEBFLOW_CONFIG.API_KEY}`,
+    Authorization: `Bearer ${process.env.WEBFLOW_API_TOKEN}`,
     Accept: "application/json",
   },
 });
@@ -71,6 +59,13 @@ interface WebflowResponse {
     "style-guidelines"?: string;
     "specific-question-patterns"?: string;
   };
+}
+
+// Add new interface for page content
+interface PageContent {
+  title: string;
+  slug: string;
+  content: string;
 }
 
 // Replace the Turndown configuration with a simple HTML-to-text converter
@@ -102,10 +97,13 @@ async function getSystemPrompt() {
 }
 
 async function getCaseStudies(): Promise<Record<string, CaseStudy>> {
+  console.log("Fetching case studies...");
   const { items } = await fetchData(
     `collections/${WEBFLOW_CONFIG.COLLECTIONS.CASE_STUDIES}/items/live`
   );
-  return items.reduce(
+  console.log(`Found ${items.length} case studies`);
+
+  const processedItems = items.reduce(
     (acc: Record<string, CaseStudy>, item: WebflowResponse) => {
       const key = item.fieldData.name.toLowerCase();
       acc[key] = {
@@ -114,33 +112,42 @@ async function getCaseStudies(): Promise<Record<string, CaseStudy>> {
         content: convertHtmlToMarkdown(item.fieldData.content || ""),
         id: item.fieldData.slug,
       };
+      console.log(
+        `Processed case study: ${item.fieldData.name} (${item.fieldData.slug})`
+      );
       return acc;
     },
     {}
   );
+
+  console.log("Case studies content:", JSON.stringify(processedItems, null, 2));
+  return processedItems;
+}
+
+// Replace existing getPageContent function
+async function getPageContent(): Promise<Record<string, PageContent>> {
+  const fetcher = new WebflowFetcher();
+  const result = await fetcher.processPage("679528029097b958606ec2ed");
+  return result.pages;
 }
 
 export async function POST(req: Request) {
   try {
-    console.log("Incoming chat request");
+    console.log("\n=== INCOMING REQUEST ===");
     const { messages } = await req.json();
-    console.log("User messages:", messages);
+    console.log("Headers:", Object.fromEntries(req.headers.entries()));
+    console.log("Messages:", JSON.stringify(messages, null, 2));
+    console.log("=== END REQUEST ===\n");
 
-    // Fetch context data
-    console.log("Fetching context data...");
-    const [systemPromptData, caseStudies] = await Promise.all([
-      getSystemPrompt(),
-      getCaseStudies(),
-    ]);
-    console.log("Context data fetched:", {
-      systemPromptData,
-      caseStudiesCount: Object.keys(caseStudies).length,
-    });
-
-    const contextData = {
-      systemPrompt: systemPromptData,
-      casestudies: Object.values(caseStudies),
-    };
+    // Enhanced logging for context data fetching
+    console.log("🔄 Starting context data fetch...");
+    const fetcher = new WebflowFetcher();
+    const contextData = await fetcher.processPage("679528029097b958606ec2ed");
+    
+    // Pretty print context data with clear separation
+    console.log("\n=== CONTEXT DATA ===");
+    console.log(JSON.stringify(contextData, null, 2));
+    console.log("=== END CONTEXT DATA ===\n");
 
     const systemPrompt = `RESPONSE FORMAT:
 You must respond with valid JSON in the following format:
@@ -157,23 +164,25 @@ You must respond with valid JSON in the following format:
   ]
 }
 
-STYLE GUIDELINES:
-${contextData.systemPrompt.styleGuidelines}
-
-SPECIFIC QUESTION PATTERNS:
-${contextData.systemPrompt.questionPatterns}
-
 Context:
-${JSON.stringify(contextData)}`;
+${JSON.stringify(contextData, (_, value) =>
+  typeof value === "string" ? value.substring(0, 1000) : value
+)}`;
 
-    console.log("Sending request to Anthropic...");
+    console.log(
+      "🤖 Sending request to Anthropic with system prompt length:",
+      systemPrompt.length
+    );
     const response = await anthropic.messages.create({
       model: "claude-3-5-haiku-20241022",
       max_tokens: 1024,
       system: systemPrompt,
       messages: messages,
     });
-    console.log("Received response from Anthropic");
+
+    // Enhanced response logging
+    console.log("✅ Anthropic Response Content:");
+    console.log(JSON.stringify(response.content[0].text, null, 2));
 
     return new Response(
       JSON.stringify({
@@ -187,12 +196,19 @@ ${JSON.stringify(contextData)}`;
       }
     );
   } catch (error) {
-    console.error("Error in chat API:", error);
+    // Enhanced error logging
+    console.error("❌ Error in chat API:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      type: error instanceof Error ? error.constructor.name : typeof error,
+      stack: error instanceof Error ? error.stack : "No stack trace available",
+    });
+
     return new Response(
       JSON.stringify({
         error: "Internal Server Error",
         message:
           error instanceof Error ? error.message : "Unknown error occurred",
+        type: error instanceof Error ? error.constructor.name : typeof error,
       }),
       {
         status: 500,
@@ -202,17 +218,4 @@ ${JSON.stringify(contextData)}`;
       }
     );
   }
-}
-
-// Add handlers for other HTTP methods
-export async function GET() {
-  return new Response("Method not allowed", { status: 405 });
-}
-
-export async function PUT() {
-  return new Response("Method not allowed", { status: 405 });
-}
-
-export async function DELETE() {
-  return new Response("Method not allowed", { status: 405 });
 }

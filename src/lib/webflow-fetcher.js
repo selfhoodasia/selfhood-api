@@ -1,6 +1,6 @@
 import axios from "axios";
 
-class WebflowFetcher {
+export class WebflowFetcher {
   static CONFIG = {
     API_KEY: process.env.WEBFLOW_API_TOKEN,
     SITE_ID: "674045e3bdb2d16d7e73efd5",
@@ -159,20 +159,3 @@ class WebflowFetcher {
     };
   }
 }
-
-// Usage remains the same
-async function main() {
-  const fetcher = new WebflowFetcher();
-  const result = await fetcher.processPage("679528029097b958606ec2ed");
-  
-  if (!result.error) {
-    console.log("Pages:", JSON.stringify(result.pages, null, 2));
-    console.log("Case Studies:", JSON.stringify(result.caseStudies, null, 2));
-    console.log("System Prompt:", JSON.stringify(result.systemPrompt, null, 2));
-  } else {
-    console.error("Error:", result.error);
-    console.error("Details:", result.details);
-  }
-}
-
-main().catch(console.error);

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  env: {
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+  },
   async headers() {
     return [
       {
@@ -14,7 +17,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Access-Control-Allow-Origin',
             value: process.env.NODE_ENV === 'development'
-              ? 'http://localhost:5500'
+              ? 'http://localhost:3000'
               : 'https://selfhood-new.webflow.io',
           },
           {
