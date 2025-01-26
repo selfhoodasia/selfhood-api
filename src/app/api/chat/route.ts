@@ -68,10 +68,17 @@ async function setCachedData(data: unknown) {
   }
 
   try {
-    console.log('Attempting to cache data:', data);
-    const response = await fetch(edgeConfig, {
+    console.log('Attempting to cache data');
+    // Extract the Edge Config ID from the URL
+    const edgeConfigId = edgeConfig.split('/').pop();
+    const apiUrl = `https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`;
+    
+    const response = await fetch(apiUrl, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.EDGE_CONFIG_TOKEN}`
+      },
       body: JSON.stringify({
         items: [{
           operation: 'upsert',
@@ -83,15 +90,21 @@ async function setCachedData(data: unknown) {
     
     console.log('Cache set response:', {
       status: response.status,
-      ok: response.ok
+      ok: response.ok,
+      statusText: response.statusText
     });
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Failed to set cache:', errorText);
+      console.error('Failed to set cache. Status:', response.status, 'Error:', errorText);
+      throw new Error(`Failed to set cache: ${errorText}`);
     }
   } catch (error) {
-    console.error('Detailed cache set error:', error);
+    console.error('Detailed cache set error:', error instanceof Error ? {
+      message: error.message,
+      stack: error.stack
+    } : error);
+    throw error;
   }
 }
 
