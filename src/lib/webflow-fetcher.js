@@ -145,7 +145,7 @@ export class WebflowFetcher {
       const key = item.fieldData.name.toLowerCase();
       acc[key] = {
         title: item.fieldData.name,
-        slug: item.fieldData.slug,
+        slug: `/casestudies/${item.fieldData.slug}`,
         content: this.#htmlToMarkdown(item.fieldData.content || '')
       };
       return acc;
