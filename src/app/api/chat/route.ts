@@ -25,8 +25,26 @@ if (!process.env.ANTHROPIC_API_KEY) {
   throw new Error("ANTHROPIC_API_KEY environment variable is not set");
 }
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Initialize Anthropic client with enhanced logging
+console.log("Starting Anthropic client initialization...");
+console.log("Environment:", process.env.NODE_ENV);
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("ANTHROPIC_API_KEY is undefined!");
+} else {
+  console.log(
+    "ANTHROPIC_API_KEY present with length:",
+    process.env.ANTHROPIC_API_KEY.length
+  );
+  console.log(
+    "ANTHROPIC_API_KEY preview:",
+    `${process.env.ANTHROPIC_API_KEY.slice(0, 10)}...${process.env.ANTHROPIC_API_KEY.slice(-10)}`
+  );
+}
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+console.log("Anthropic client initialized");
 
 // Configure axios instance for Webflow
 const webflowClient = axios.create({
