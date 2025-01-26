@@ -3,7 +3,7 @@ import { WebflowFetcher } from "@/lib/webflow-fetcher";
 const WEBFLOW_PAGE_ID = "679528029097b958606ec2ed";
 const CACHE_KEY = `webflow_page_${WEBFLOW_PAGE_ID}`;
 
-export async function POST(_req: Request) {
+export async function POST() {
   try {
     console.log('Webhook triggered - fetching fresh data');
     const webflowFetcher = new WebflowFetcher();

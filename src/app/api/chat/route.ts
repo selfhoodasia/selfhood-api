@@ -33,6 +33,11 @@ const CACHE_KEY = `webflow_page_${WEBFLOW_PAGE_ID}`;
 
 // Helper function to get cached data
 async function getCachedData() {
+  if (!edgeConfig) {
+    console.error('Edge Config URL is not available');
+    return null;
+  }
+
   try {
     console.log('Fetching from Edge Config URL:', edgeConfig);
     const response = await fetch(`${edgeConfig}/items/${CACHE_KEY}`);
@@ -57,6 +62,11 @@ async function getCachedData() {
 
 // Helper function to set cached data
 async function setCachedData(data: unknown) {
+  if (!edgeConfig) {
+    console.error('Edge Config URL is not available');
+    return;
+  }
+
   try {
     console.log('Attempting to cache data:', data);
     const response = await fetch(edgeConfig, {
