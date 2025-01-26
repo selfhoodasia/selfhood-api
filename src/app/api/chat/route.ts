@@ -20,93 +20,10 @@ Object.entries(requiredEnvVars).forEach(([key, value]) => {
 // Initialize clients
 const anthropic = new Anthropic({ apiKey: requiredEnvVars.ANTHROPIC_API_KEY });
 const webflowFetcher = new WebflowFetcher();
-const edgeConfig = process.env.EDGE_CONFIG;
-
-if (!edgeConfig) {
-  throw new Error('EDGE_CONFIG environment variable is not set');
-}
 
 // Constants
 const WEBFLOW_PAGE_ID = "679528029097b958606ec2ed";
 const MODEL = "claude-3-5-haiku-20241022";
-const CACHE_KEY = `webflow_page_${WEBFLOW_PAGE_ID}`;
-
-// Helper function to get cached data
-async function getCachedData() {
-  if (!edgeConfig) {
-    console.error('Edge Config URL is not available');
-    return null;
-  }
-
-  try {
-    console.log('Fetching from Edge Config URL:', edgeConfig);
-    const response = await fetch(`${edgeConfig}/items/${CACHE_KEY}`);
-    console.log('Edge Config Response:', {
-      status: response.status,
-      ok: response.ok
-    });
-    
-    if (!response.ok) {
-      console.log('Cache miss - no data found');
-      return null;
-    }
-    
-    const data = await response.json();
-    console.log('Cache hit - data found:', data);
-    return data;
-  } catch (error) {
-    console.error('Detailed Edge Config fetch error:', error);
-    return null;
-  }
-}
-
-// Helper function to set cached data
-async function setCachedData(data: unknown) {
-  if (!edgeConfig) {
-    console.error('Edge Config URL is not available');
-    return;
-  }
-
-  try {
-    console.log('Attempting to cache data');
-    // Extract the Edge Config ID from the URL
-    const edgeConfigId = edgeConfig.split('/').pop();
-    const apiUrl = `https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.EDGE_CONFIG_TOKEN}`
-      },
-      body: JSON.stringify({
-        items: [{
-          operation: 'upsert',
-          key: CACHE_KEY,
-          value: data
-        }]
-      }),
-    });
-    
-    console.log('Cache set response:', {
-      status: response.status,
-      ok: response.ok,
-      statusText: response.statusText
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Failed to set cache. Status:', response.status, 'Error:', errorText);
-      throw new Error(`Failed to set cache: ${errorText}`);
-    }
-  } catch (error) {
-    console.error('Detailed cache set error:', error instanceof Error ? {
-      message: error.message,
-      stack: error.stack
-    } : error);
-    throw error;
-  }
-}
 
 // Helper functions
 const createSystemPrompt = (contextData: unknown) => `RESPONSE FORMAT:
@@ -132,16 +49,7 @@ ${JSON.stringify(contextData, (_, value) =>
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
-    
-    // Try to get cached data first
-    let contextData = await getCachedData();
-    
-    // If no cached data, fetch and cache it
-    if (!contextData) {
-      contextData = await webflowFetcher.processPage(WEBFLOW_PAGE_ID);
-      await setCachedData(contextData);
-    }
-
+    const contextData = await webflowFetcher.processPage(WEBFLOW_PAGE_ID);
     const systemPrompt = createSystemPrompt(contextData);
 
     console.log("\n=== CHAT REQUEST ===");
