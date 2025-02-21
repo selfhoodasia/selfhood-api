@@ -1,144 +1,156 @@
-import { Anthropic } from "@anthropic-ai/sdk";
+// route.ts
+import { anthropic } from "@ai-sdk/anthropic";
+import { generateObject } from "ai";
 import { WebflowFetcher } from "@/lib/webflow-fetcher";
+import { z } from "zod";
 
-// Add debug logging at the top of the file
-console.log("Environment Variables Check:");
-console.log("ANTHROPIC_API_KEY:", process.env.ANTHROPIC_API_KEY);
-console.log("WEBFLOW_API_TOKEN:", process.env.WEBFLOW_API_TOKEN);
-
-// Environment validation
-const requiredEnvVars = {
+// -----------------------------------------------------------------------
+// Environment Validation
+// -----------------------------------------------------------------------
+const env = {
   WEBFLOW_API_TOKEN: process.env.WEBFLOW_API_TOKEN,
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
 } as const;
 
-// Validate all required environment variables
-Object.entries(requiredEnvVars).forEach(([key, value]) => {
-  if (!value) throw new Error(`${key} environment variable is not set`);
-});
-
-// Initialize clients
-const anthropic = new Anthropic({ apiKey: requiredEnvVars.ANTHROPIC_API_KEY });
-const webflowFetcher = new WebflowFetcher();
-
-// Constants
-const WEBFLOW_PAGE_ID = "679528029097b958606ec2ed";
-const MODEL = "claude-3-5-haiku-20241022";
-
-// Helper functions
-const createSystemPrompt = (contextData: unknown) => `RESPONSE FORMAT:
-You must respond with valid JSON in the following format:
-{
-  "answer": "Your direct answer (1-3 sentences, max 50 words)",
-  "sources": [{ // only show 1 max
-    "slug": "slug",
-    "title": "title",
-  }],
-  "followUpQuestions": [ // max 10 words each, should not be directly related to the current answer/source
-    "First follow-up question",
-    "Second follow-up question",
-    "Third follow-up question"
-  ]
+for (const [key, value] of Object.entries(env)) {
+  if (!value) {
+    throw new Error(`${key} environment variable is not set`);
+  }
 }
 
-Context:
-${JSON.stringify(contextData, (_, value) =>
-  typeof value === "string" ? value.substring(0, 1000) : value
-)}`;
+// -----------------------------------------------------------------------
+// Client Initialization & Helpers
+// -----------------------------------------------------------------------
+const webflowFetcher = new WebflowFetcher();
 
+// Creates a system prompt including context retrieved from Webflow.
+async function createSystemPrompt(): Promise<string> {
+  const contextData = await webflowFetcher.processPage();
+  const contextStr = JSON.stringify(contextData, null, 2);
+  return `You must respond with a JSON object in exactly this format:
+{
+  "answer": "Your direct answer (1-3 sentences)",
+  "sources": [{"slug": "string", "title": "string"}],
+  "followUpQuestions": ["Question 1", "Question 2", "Question 3"]
+}
+Do not include any other text or explanation outside of this JSON structure.
+
+Context:
+${contextStr}`;
+}
+
+// Logger utility (logs in development mode)
+const logger = {
+  log: (...args: unknown[]) =>
+    process.env.NODE_ENV === "development" && console.log(...args),
+  error: (...args: unknown[]) => console.error(...args),
+};
+
+// -----------------------------------------------------------------------
+// Response Schema & Fallback
+// -----------------------------------------------------------------------
+const responseSchema = z.object({
+  answer: z.string().max(50),
+  sources: z.array(
+    z.object({
+      slug: z.string(),
+      title: z.string(),
+    })
+  ),
+  followUpQuestions: z.array(z.string()).length(3),
+});
+
+const fallbackResponse = {
+  answer: "",
+  sources: [],
+  followUpQuestions: ["", "", ""],
+};
+
+// -----------------------------------------------------------------------
+// AI Output Parsing Helper
+// -----------------------------------------------------------------------
+function parseAIOutput(text: string): typeof fallbackResponse {
+  try {
+    let cleanedText = text.trim();
+
+    // Remove Markdown code fences, if present.
+    if (cleanedText.startsWith("```")) {
+      const parts = cleanedText.split("\n");
+      parts.shift(); // Remove the opening fence.
+      if (parts.length && parts[parts.length - 1].startsWith("```")) {
+        parts.pop(); // Remove the closing fence.
+      }
+      cleanedText = parts.join("\n").trim();
+    }
+
+    // Extract the JSON substring if extra text exists.
+    const jsonMatch = cleanedText.match(/{[\s\S]*}/);
+    if (jsonMatch) {
+      cleanedText = jsonMatch[0];
+    }
+
+    const parsed = JSON.parse(cleanedText);
+    return {
+      answer: typeof parsed.answer === "string" ? parsed.answer : "",
+      sources: Array.isArray(parsed.sources) ? parsed.sources : [],
+      followUpQuestions:
+        Array.isArray(parsed.followUpQuestions) &&
+        parsed.followUpQuestions.length === 3
+          ? parsed.followUpQuestions
+          : ["", "", ""],
+    };
+  } catch (error) {
+    logger.error("Error parsing AI output:", error);
+    return fallbackResponse;
+  }
+}
+
+// -----------------------------------------------------------------------
+// API Route Handler
+// -----------------------------------------------------------------------
 export async function POST(req: Request) {
   const startTime = performance.now();
-  const timings: Record<string, number> = {};
 
   try {
-    console.log("\n=== CHAT REQUEST STARTED ===");
-
     const { messages } = await req.json();
-    console.log("Messages received:", messages.length);
 
-    // Time context fetching
-    const contextStartTime = performance.now();
-    const contextData = await webflowFetcher.processPage(WEBFLOW_PAGE_ID);
-    timings.contextFetch = performance.now() - contextStartTime;
+    // Compose the conversation with system prompt containing structured context.
+    const systemPrompt = await createSystemPrompt();
+    const messagesWithContext = [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ];
 
-    // Time system prompt creation
-    const promptStartTime = performance.now();
-    const systemPrompt = createSystemPrompt(contextData);
-    timings.promptCreation = performance.now() - promptStartTime;
-
-    console.log("Operation Timings (ms):");
-    console.log("- Context Fetch:", timings.contextFetch.toFixed(2));
-    console.log("- Prompt Creation:", timings.promptCreation.toFixed(2));
-
-    // Log request details
-    console.log("Last Message:", messages[messages.length - 1]);
-    console.log(
-      "Context Data Size:",
-      JSON.stringify(contextData).length,
-      "bytes"
-    );
-    console.log("System Prompt Size:", systemPrompt.length, "chars");
-
-    // Time API call
-    const apiStartTime = performance.now();
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages,
+    // Call the AI model with our schema and custom parsing.
+    const result = await generateObject<typeof fallbackResponse>({
+      model: anthropic("claude-3-5-haiku-20241022"),
+      messages: messagesWithContext,
+      maxRetries: 3,
+      schema: responseSchema,
+      temperature: 0.7,
+      maxTokens: 1000,
+      parse: parseAIOutput,
     });
-    timings.apiCall = performance.now() - apiStartTime;
 
-    console.log("\n=== CHAT RESPONSE ===");
-    console.log("API Call Duration:", timings.apiCall.toFixed(2), "ms");
-    console.log("Response:", JSON.stringify(response.content[0], null, 2));
-
-    // Calculate total duration
-    const totalDuration = performance.now() - startTime;
-    console.log("\n=== REQUEST COMPLETE ===");
-    console.log("Total Duration:", totalDuration.toFixed(2), "ms");
-    console.log("Timing Breakdown:", timings);
-
-    return new Response(
-      JSON.stringify({
-        role: "assistant",
-        content: response.content[0],
-        _debug: { timings },
-      }),
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  } catch (error) {
-    const errorTime = performance.now() - startTime;
-    console.error("\n=== ERROR IN CHAT API ===");
-    console.error("Error occurred after:", errorTime.toFixed(2), "ms");
-    console.error(
-      "Error details:",
-      error instanceof Error
-        ? {
-            message: error.message,
-            type: error.constructor.name,
-            stack: error.stack,
-          }
-        : "Unknown error"
-    );
-
-    const errorResponse = {
-      error: "Internal Server Error",
-      message:
-        error instanceof Error ? error.message : "Unknown error occurred",
-      type: error instanceof Error ? error.constructor.name : typeof error,
-      _debug: { timings, errorTime },
+    // Apply fallback defaults if any key is missing.
+    const sanitizedResult = {
+      answer: result?.answer ?? "",
+      sources: result?.sources ?? [],
+      followUpQuestions: result?.followUpQuestions ?? ["", "", ""],
     };
 
-    return new Response(JSON.stringify(errorResponse), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    // Log the raw LLM output
+    logger.log("Raw LLM Output:", result?.rawOutput);
+
+    // Validate the cleaned object. A Zod error here indicates a schema mismatch.
+    const validated = responseSchema.parse(sanitizedResult);
+
+    const endTime = performance.now();
+    logger.log("Total response time:", endTime - startTime, "ms");
+
+    return Response.json(validated);
+  } catch (error) {
+    logger.error("Error in chat route:", error);
+    return new Response("Error processing request", { status: 500 });
   }
 }
