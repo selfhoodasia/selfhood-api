@@ -1,25 +1,22 @@
 // route.ts
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
-import { WebflowFetcher } from "@/lib/webflow-fetcher";
 import { z } from "zod";
 import fs from "fs/promises";
+import { get } from '@vercel/edge-config';
 
 // Constants - update the model to a Google Generative AI one
 const MODEL = "gemini-2.0-flash-lite-preview-02-05";
 
 // Environment validation
 const env = {
-  WEBFLOW_API_TOKEN: process.env.WEBFLOW_API_TOKEN,
   GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  VERCEL_API_TOKEN: process.env.VERCEL_API_TOKEN,
 } as const;
 
 Object.entries(env).forEach(([key, value]) => {
   if (!value) throw new Error(`${key} environment variable is not set`);
 });
-
-// Initialize clients
-const webflowFetcher = new WebflowFetcher();
 
 // Logger utility (controlled by environment)
 const logger = {
@@ -58,19 +55,36 @@ export async function POST(req: Request) {
     logger.log("=== CHAT REQUEST STARTED ===");
     const { messages } = await req.json();
 
-    // Fetch context
+    // --- Fetch context from the latest blob via Edge Config ---
+
     const contextStart = performance.now();
-    const contextData = await webflowFetcher.processPage();
+
+    // Directly use edge-config to get the latest context URL
+    const latestContextUrl = await get('latestContextUrl');
+    if (!latestContextUrl) {
+      throw new Error("Latest context URL not found in Edge Config");
+    }
+
+    const blobResponse = await fetch(String(latestContextUrl));
+    if (!blobResponse.ok) {
+      throw new Error(
+        `Failed to fetch blob content from ${latestContextUrl}: ${blobResponse.statusText}`
+      );
+    }
+    // The blob was stored as JSON stringified content
+    const contextData = await blobResponse.json();
+
     if (process.env.NODE_ENV === "development") {
       await fs.writeFile(
-        "./fetchedContent.json",
+        "./fetchedBlobContent.json",
         JSON.stringify(contextData, null, 2),
         "utf8"
       );
     }
     timings.contextFetch = performance.now() - contextStart;
 
-    // Generate response using AI SDK with the fixed Zod schema
+    // --- Generate response using AI SDK with the fixed Zod schema ---
+
     const apiStart = performance.now();
 
     const response = await generateObject({
@@ -100,6 +114,7 @@ IMPORTANT: Your answer should be:
         }
       },
     });
+
     logger.log("=== RESPONSE DEBUG ===");
     logger.log("Parsed object:", response.object);
     logger.log("Token usage:", response.usage);
