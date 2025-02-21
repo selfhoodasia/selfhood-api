@@ -121,9 +121,15 @@ export class WebflowFetcher {
    */
   public async processPage(): Promise<FetchResult> {
     const [dom, caseStudiesData, systemPromptData] = await Promise.all([
-      this.fetchData<WebflowNode[] | WebflowNode>(`pages/${Config.data.CONTEXT_ID}/dom`),
-      this.fetchData<{ items: WebflowCaseStudyItem[] }>(`collections/${Config.data.COLLECTIONS.CASE_STUDIES}/items/live`),
-      this.fetchData<WebflowSystemPromptItem>(`collections/${Config.data.COLLECTIONS.SYSTEM_PROMPT}/items/${Config.data.ITEMS.SYSTEM_PROMPT}/live`),
+      this.fetchData<WebflowNode[] | WebflowNode>(
+        `pages/${Config.data.CONTEXT_ID}/dom`
+      ),
+      this.fetchData<{ items: WebflowCaseStudyItem[] }>(
+        `collections/${Config.data.COLLECTIONS.CASE_STUDIES}/items/live`
+      ),
+      this.fetchData<WebflowSystemPromptItem>(
+        `collections/${Config.data.COLLECTIONS.SYSTEM_PROMPT}/items/${Config.data.ITEMS.SYSTEM_PROMPT}/live`
+      ),
     ]);
 
     // Normalize the DOM nodes – account for both array and object responses.
@@ -148,7 +154,9 @@ export class WebflowFetcher {
   /**
    * Recursively process component-instance nodes to resolved definitions.
    */
-  private async processComponents(nodes: WebflowNode[]): Promise<WebflowNode[]> {
+  private async processComponents(
+    nodes: WebflowNode[]
+  ): Promise<WebflowNode[]> {
     return Promise.all(
       nodes.map(async (node) => {
         if (node.type === "component-instance" && node.componentId) {
@@ -180,7 +188,9 @@ export class WebflowFetcher {
             markdown: "",
           };
         } else if (currentPage) {
-          content[currentPage].markdown += `${this.turndownService.turndown(node.text.html)}\n`;
+          content[currentPage].markdown += `${this.turndownService.turndown(
+            node.text.html
+          )}\n`;
         }
       }
       node.children?.forEach(traverse);
@@ -196,17 +206,24 @@ export class WebflowFetcher {
   private createSlug(title: string): string {
     return title.toLowerCase() === "index"
       ? "/in"
-      : `/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+      : `/${title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")}`;
   }
 
   /**
    * Retrieves component definitions from cache or via API.
    */
-  private async getComponentDefinition(componentId: string): Promise<WebflowNode[]> {
+  private async getComponentDefinition(
+    componentId: string
+  ): Promise<WebflowNode[]> {
     if (this.componentCache.has(componentId)) {
       return this.componentCache.get(componentId)!;
     }
-    const data = await this.fetchData<WebflowNode[]>(`sites/${Config.data.SITE_ID}/components/${componentId}/dom`);
+    const data = await this.fetchData<WebflowNode[]>(
+      `sites/${Config.data.SITE_ID}/components/${componentId}/dom`
+    );
     this.componentCache.set(componentId, data);
     return data;
   }
@@ -230,7 +247,9 @@ export class WebflowFetcher {
   /**
    * Transforms raw Webflow case study items into a key/value map.
    */
-  private transformCaseStudies(items: WebflowCaseStudyItem[]): Record<string, CaseStudy> {
+  private transformCaseStudies(
+    items: WebflowCaseStudyItem[]
+  ): Record<string, CaseStudy> {
     return Object.fromEntries(
       items.map((item) => {
         const name = item.fieldData.name.trim();
@@ -251,7 +270,9 @@ export class WebflowFetcher {
   /**
    * Transforms raw system prompt data into a formatted object.
    */
-  private transformSystemPrompt(data: WebflowSystemPromptItem): SystemPromptData {
+  private transformSystemPrompt(
+    data: WebflowSystemPromptItem
+  ): SystemPromptData {
     const {
       fieldData: {
         "style-guidelines": styleGuidelines = "",
