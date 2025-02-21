@@ -82,10 +82,10 @@ IMPORTANT: Your answer should be:
 - Clear and concise (2-3 sentences)
 - Focused on directly answering the questions
 - Based ONLY on the provided context data, not external knowledge
-- When citing sources, use the exact title and slug from the context
+- When citing sources, use the exact title and slug from the context.
+- Always provide a source, even if not immediately relevant – to push the user to explore the site more. You can preface this in the answer if needed, so that it feels natural.
 - Followed by exactly 3 relevant follow-up questions`,
       maxRetries: 3,
-      experimental_streamResponses: true,
       experimental_repairText: async (options) => {
         logger.log("=== REPAIR ATTEMPT ===");
         logger.log("Error:", options.error);
