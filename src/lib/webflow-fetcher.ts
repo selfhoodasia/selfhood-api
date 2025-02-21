@@ -1,5 +1,3 @@
-// webflow-fetcher.ts - Optimized and Cleaned-up Version
-
 import axios, { AxiosInstance } from "axios";
 import TurndownService from "turndown";
 
@@ -24,7 +22,7 @@ interface WebflowConfig {
 export interface PageContent {
   title: string;
   slug: string;
-  markdown: string;
+  content: string;
 }
 
 export interface CaseStudy {
@@ -44,7 +42,7 @@ export interface FetchResult {
   systemPrompt: SystemPromptData;
 }
 
-// Data types specific to Webflow responses
+// Webflow response specific types
 interface WebflowNode {
   type: string;
   componentId?: string;
@@ -102,8 +100,8 @@ class Config {
 
 export class WebflowFetcher {
   private axiosInstance: AxiosInstance;
-  private componentCache = new Map<string, WebflowNode[]>();
   private turndownService = new TurndownService({ emDelimiter: "*" });
+  private componentCache = new Map<string, WebflowNode[]>();
 
   constructor() {
     Config.validate();
@@ -117,13 +115,11 @@ export class WebflowFetcher {
   }
 
   /**
-   * Fetches and processes all necessary data concurrently.
+   * Fetches all necessary data concurrently and processes it.
    */
   public async processPage(): Promise<FetchResult> {
-    const [dom, caseStudiesData, systemPromptData] = await Promise.all([
-      this.fetchData<WebflowNode[] | WebflowNode>(
-        `pages/${Config.data.CONTEXT_ID}/dom`
-      ),
+    const [domResponse, caseStudiesData, systemPromptData] = await Promise.all([
+      this.fetchData<{ nodes: WebflowNode[] }>(`pages/${Config.data.CONTEXT_ID}/dom`),
       this.fetchData<{ items: WebflowCaseStudyItem[] }>(
         `collections/${Config.data.COLLECTIONS.CASE_STUDIES}/items/live`
       ),
@@ -132,100 +128,117 @@ export class WebflowFetcher {
       ),
     ]);
 
-    // Normalize the DOM nodes – account for both array and object responses.
-    let nodes: WebflowNode[];
-    if (Array.isArray(dom)) {
-      nodes = dom;
-    } else if (dom && Array.isArray(dom.children)) {
-      nodes = dom.children;
-    } else {
-      nodes = [dom];
-    }
+    // Use debug logging or remove in production
+    console.debug("Initial DOM data:", JSON.stringify(domResponse, null, 2));
 
-    // Process nested components
-    const processedNodes = await this.processComponents(nodes);
+    // Recursively resolve nested component instances
+    const processedNodes = await this.recursivelyFetchComponents(domResponse.nodes);
+    console.debug(
+      "Processed DOM data:",
+      JSON.stringify({ ...domResponse, nodes: processedNodes }, null, 2)
+    );
+
     return {
-      pages: this.extractContent(processedNodes),
+      pages: this.extractContent(Array.isArray(processedNodes) ? processedNodes : [processedNodes]),
       caseStudies: this.transformCaseStudies(caseStudiesData.items),
       systemPrompt: this.transformSystemPrompt(systemPromptData),
     };
   }
 
   /**
-   * Recursively process component-instance nodes to resolved definitions.
+   * Recursively processes nodes and fetches nested component instances.
    */
-  private async processComponents(
-    nodes: WebflowNode[]
-  ): Promise<WebflowNode[]> {
-    return Promise.all(
-      nodes.map(async (node) => {
-        if (node.type === "component-instance" && node.componentId) {
-          node.children = await this.getComponentDefinition(node.componentId);
-        }
-        if (node.children && node.children.length > 0) {
-          node.children = await this.processComponents(node.children);
-        }
+  private async recursivelyFetchComponents(nodes: WebflowNode[]): Promise<WebflowNode[]> {
+    const processNode = async (node: WebflowNode): Promise<WebflowNode> => {
+      if (node.type === "component-instance" && node.componentId) {
+        // Use the cache-aware helper to fetch component DOM
+        const componentNodes = await this.getComponentDefinition(node.componentId);
+        node.children = await this.recursivelyFetchComponents(componentNodes);
         return node;
-      })
-    );
+      }
+
+      if (node.children && node.children.length) {
+        node.children = await Promise.all(node.children.map(processNode));
+      }
+      return node;
+    };
+
+    return Promise.all(nodes.map(processNode));
   }
 
   /**
-   * Recursively traverses nodes to extract page content, converting HTML to Markdown.
+   * Traverses DOM nodes, converting HTML text to markdown and extracting page content.
    */
   private extractContent(nodes: WebflowNode[]): Record<string, PageContent> {
-    const content: Record<string, PageContent> = {};
+    const pages: Record<string, PageContent> = {};
     let currentPage: string | null = null;
 
     const traverse = (node: WebflowNode): void => {
       if (node.type === "text" && node.text?.html) {
-        // Identify page title via a CSS class indicator.
+        // Detect a page title using a CSS indicator.
         if (node.text.html.includes('class="page-title"')) {
           currentPage = node.text.text.trim();
-          content[currentPage] = {
+          pages[currentPage] = {
             title: currentPage,
             slug: this.createSlug(currentPage),
-            markdown: "",
+            content: "",
           };
         } else if (currentPage) {
-          content[currentPage].markdown += `${this.turndownService.turndown(
-            node.text.html
-          )}\n`;
+          const markdownContent = this.turndownService.turndown(node.text.html);
+          pages[currentPage].content += this.sanitizeContent(markdownContent) + "\n";
         }
       }
       node.children?.forEach(traverse);
     };
 
     nodes.forEach(traverse);
-    return content;
+
+    // Standardize content for each page
+    Object.values(pages).forEach(page => {
+      page.content = this.standardizeContent(page.content);
+    });
+
+    return pages;
   }
 
   /**
-   * Utility function to create a slug from a title.
+   * Cleans and standardizes content.
+   */
+  private standardizeContent(content: string): string {
+    return content
+      .replace(/\s+/g, " ") // Collapse multiple spaces
+      .replace(/\n\s*\n/g, "\n") // Collapse multiple newlines
+      .trim()
+      .replace(/\[|\]|\*|_/g, "") // Remove markdown formatting characters
+      .replace(/\(https?:\/\/[^\)]+\)/g, ""); // Remove URLs
+  }
+
+  /**
+   * Creates a URL-friendly slug from the provided title.
    */
   private createSlug(title: string): string {
-    return title.toLowerCase() === "index"
-      ? "/in"
-      : `/${title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")}`;
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle === "index") return "/in";
+    return (
+      "/" +
+      lowerTitle
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+    );
   }
 
   /**
    * Retrieves component definitions from cache or via API.
    */
-  private async getComponentDefinition(
-    componentId: string
-  ): Promise<WebflowNode[]> {
+  private async getComponentDefinition(componentId: string): Promise<WebflowNode[]> {
     if (this.componentCache.has(componentId)) {
       return this.componentCache.get(componentId)!;
     }
-    const data = await this.fetchData<WebflowNode[]>(
+    const data = await this.fetchData<{ nodes: WebflowNode[] }>(
       `sites/${Config.data.SITE_ID}/components/${componentId}/dom`
     );
-    this.componentCache.set(componentId, data);
-    return data;
+    this.componentCache.set(componentId, data.nodes);
+    return data.nodes;
   }
 
   /**
@@ -233,34 +246,28 @@ export class WebflowFetcher {
    */
   private async fetchData<T>(endpoint: string): Promise<T> {
     try {
-      const { data } = await this.axiosInstance.get<T>(endpoint);
-      return data;
+      const response = await this.axiosInstance.get<T>(endpoint);
+      return response.data;
     } catch (error: unknown) {
-      let errorMessage = "An unknown error occurred";
-      if (axios.isAxiosError(error)) {
-        errorMessage = error.message || errorMessage;
-      }
-      throw new Error(`Failed to fetch ${endpoint}: ${errorMessage}`);
+      const errorMsg = axios.isAxiosError(error) ? error.message : "Unknown error";
+      throw new Error(`Failed to fetch ${endpoint}: ${errorMsg}`);
     }
   }
 
   /**
-   * Transforms raw Webflow case study items into a key/value map.
+   * Transforms raw case study items into a standardized record.
    */
-  private transformCaseStudies(
-    items: WebflowCaseStudyItem[]
-  ): Record<string, CaseStudy> {
+  private transformCaseStudies(items: WebflowCaseStudyItem[]): Record<string, CaseStudy> {
     return Object.fromEntries(
-      items.map((item) => {
-        const name = item.fieldData.name.trim();
+      items.map(item => {
+        const title = item.fieldData.name.trim();
+        const markdownContent = this.turndownService.turndown(item.fieldData.content || "");
         return [
-          name.toLowerCase(),
+          title.toLowerCase(),
           {
-            title: name,
+            title,
             slug: `/casestudies/${item.fieldData.slug}`,
-            content: this.sanitizeContent(
-              this.turndownService.turndown(item.fieldData.content || "")
-            ),
+            content: this.sanitizeContent(markdownContent),
           },
         ];
       })
@@ -268,11 +275,9 @@ export class WebflowFetcher {
   }
 
   /**
-   * Transforms raw system prompt data into a formatted object.
+   * Transforms raw system prompt data into a structured object.
    */
-  private transformSystemPrompt(
-    data: WebflowSystemPromptItem
-  ): SystemPromptData {
+  private transformSystemPrompt(data: WebflowSystemPromptItem): SystemPromptData {
     const {
       fieldData: {
         "style-guidelines": styleGuidelines = "",
@@ -283,7 +288,7 @@ export class WebflowFetcher {
   }
 
   /**
-   * Sanitizes content by stripping out unwanted Webflow-specific link patterns.
+   * Sanitizes markdown content by removing unwanted Webflow leftovers.
    */
   private sanitizeContent(content: string): string {
     return content.replace(
