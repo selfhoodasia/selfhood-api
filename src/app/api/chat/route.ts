@@ -3,10 +3,10 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import fs from "fs/promises";
-import { get } from '@vercel/edge-config';
+import { get } from "@vercel/edge-config";
 
 // Constants - update the model to a Google Generative AI one
-const MODEL = "gemini-2.0-flash-lite-preview-02-05";
+const MODEL = "gemini-2.0-flash-lite";
 
 // Environment validation
 const env = {
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     const contextStart = performance.now();
 
     // Directly use edge-config to get the latest context URL
-    const latestContextUrl = await get('latestContextUrl');
+    const latestContextUrl = await get("latestContextUrl");
     if (!latestContextUrl) {
       throw new Error("Latest context URL not found in Edge Config");
     }
@@ -95,9 +95,9 @@ export async function POST(req: Request) {
 IMPORTANT: Your answer should be:
 - Clear and concise (2-3 sentences)
 - Focused on directly answering the questions
-- Based ONLY on the provided context data, not external knowledge
+- Based ONLY on the provided context data, not external knowledge. Avoid phrases like "I am..." and similar personal statements. If a subject is needed, consider using "We" instead.
 - When citing sources, use the exact title and slug from the context.
-- Always provide a source, even if not immediately relevant – to push the user to explore the site more. You can preface this in the answer if needed, so that it feels natural.
+- Always provide a source, even if not immediately relevant – to push the user to explore the site more.
 - Followed by exactly 3 relevant follow-up questions`,
       maxRetries: 3,
       experimental_repairText: async (options) => {
