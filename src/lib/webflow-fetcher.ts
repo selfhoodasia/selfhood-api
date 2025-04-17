@@ -75,15 +75,15 @@ interface WebflowSystemPromptItem {
 class Config {
   static readonly data: WebflowConfig = {
     API_KEY: process.env.WEBFLOW_API_TOKEN || "",
-    SITE_ID: "674045e3bdb2d16d7e73efd5",
-    CONTEXT_ID: "679528029097b958606ec2ed",
+    SITE_ID: "6800d1e97fbffea94398dc1d",
+    CONTEXT_ID: "6800d1e97fbffea94398dc5b",
     BASE_URL: "https://api.webflow.com/v2",
     COLLECTIONS: {
-      CASE_STUDIES: "67405a6bc01960d426e5da3f",
-      SYSTEM_PROMPT: "67409359ef24c542fe79ed6c",
+      CASE_STUDIES: "6800d1e97fbffea94398dc4a",
+      SYSTEM_PROMPT: "6800d1e97fbffea94398dc60",
     },
     ITEMS: {
-      SYSTEM_PROMPT: "674093e0ef24c542fe7a83b1",
+      SYSTEM_PROMPT: "6800d1e97fbffea94398dc99",
     },
   };
 
