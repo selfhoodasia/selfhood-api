@@ -14,7 +14,6 @@ A Next.js application that combines Anthropic's Claude AI with Webflow CMS to cr
 
 - Node.js (Latest LTS version recommended)
 - Webflow API Token
-- Anthropic API Key
 
 ## Environment Variables
 

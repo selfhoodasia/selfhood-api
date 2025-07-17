@@ -1,10 +1,17 @@
 import { WebflowFetcher } from "@/lib/webflow-fetcher";
 import { put } from "@vercel/blob";
 
-export async function POST(_req: Request) {
-  void _req;
+const requiredEnv = {
+  VERCEL_API_TOKEN: process.env.VERCEL_API_TOKEN,
+  EDGE_CONFIG_ID: process.env.EDGE_CONFIG_ID,
+} as const;
+
+Object.entries(requiredEnv).forEach(([key, value]) => {
+  if (!value) throw new Error(`${key} environment variable is not set`);
+});
+
+export async function POST() {
   try {
-    // Optionally, verify the request is from a trusted source (e.g., check header or token)
     const webflowFetcher = new WebflowFetcher();
     const fetchedData = await webflowFetcher.processPage();
     const jsonData = JSON.stringify(fetchedData, null, 2);
@@ -12,25 +19,16 @@ export async function POST(_req: Request) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const blobFilename = `context-${timestamp}.json`;
 
-    // Upload to blob storage
     const blob = await put(blobFilename, jsonData, {
-      access: "public", // Set access as needed.
+      access: "public",
     });
 
-    const edgeConfigId = "ecfg_ybrypcsldkjlqv6ye4fdhf6x2yef"; // Hardcoded for testing
-
-    // Verify API token exists
-    if (!process.env.VERCEL_API_TOKEN) {
-      throw new Error("VERCEL_API_TOKEN environment variable is not set");
-    }
-
-    // Update Edge Config using the direct API
     const response = await fetch(
-      `https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`,
+      `https://api.vercel.com/v1/edge-config/${requiredEnv.EDGE_CONFIG_ID}/items`,
       {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
+          Authorization: `Bearer ${requiredEnv.VERCEL_API_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -59,8 +57,6 @@ export async function POST(_req: Request) {
       );
     }
 
-    // Return the blobUrl. Note: the internal name may show additional unique characters,
-    // but the key used to write the file is still "context.json".
     return new Response(
       JSON.stringify({
         success: true,
