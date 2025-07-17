@@ -31,8 +31,21 @@ export async function OPTIONS(req: Request) {
 export async function GET(req: Request) {
   const origin = req.headers.get("origin") || "";
   
+  if (!process.env.EDGE_CONFIG_ID) {
+    return new Response(
+      JSON.stringify({ error: 'EDGE_CONFIG_ID environment variable is not set' }), 
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCorsHeaders(origin),
+        },
+      }
+    );
+  }
+  
   try {
-    const edgeConfig = createClient(process.env.EDGE_CONFIG_ID!);
+    const edgeConfig = createClient(process.env.EDGE_CONFIG_ID);
     const latestUrl = await edgeConfig.get('latestContextUrl');
     
     return new Response(JSON.stringify({ url: latestUrl }), {
