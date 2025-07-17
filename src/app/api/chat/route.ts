@@ -107,7 +107,9 @@ export async function POST(req: Request) {
     const apiStart = performance.now();
 
     const response = await generateObject({
-      model: google(MODEL),
+      model: google(MODEL, {
+        structuredOutputs: false
+      }),
       messages,
       schema: responseSchema,
       system: `Context:\n${JSON.stringify(contextData, null, 2)}\n\n
